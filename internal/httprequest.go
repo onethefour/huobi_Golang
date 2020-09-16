@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"huobi_Golang/common/log"
 	"huobi_Golang/common/perflogger"
 	"io/ioutil"
 	"net/http"
@@ -9,7 +8,6 @@ import (
 )
 
 func HttpGet(url string) (string, error) {
-	log.Info(url)
 	logger := perflogger.GetInstance()
 	logger.Start()
 

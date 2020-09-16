@@ -1,10 +1,14 @@
 package client
 
+import "C"
 import (
-	"github.com/shopspring/decimal"
+	"fmt"
 	log "huobi_Golang/common/log"
+	"huobi_Golang/pkg/client/contractclient"
 	"huobi_Golang/pkg/model/c2c"
 	"strconv"
+
+	"github.com/shopspring/decimal"
 )
 
 type Client struct {
@@ -19,6 +23,7 @@ type Client struct {
 	*OrderClient
 	*SubUserClient
 	*WalletClient
+	*contractclient.ContractClient
 	AccessKey string
 	SecretKey string
 	Host      string
@@ -45,7 +50,7 @@ func NewClient(AccessKey, SecretKey, Host string) *Client {
 	client.OrderClient = new(OrderClient).Init(AccessKey, SecretKey, Host)
 	client.SubUserClient = new(SubUserClient).Init(AccessKey, SecretKey, Host)
 	client.WalletClient = new(WalletClient).Init(AccessKey, SecretKey, Host)
-
+	client.ContractClient = new(contractclient.ContractClient).Init(AccessKey, SecretKey, Host)
 	resp, err := client.GetAccountInfo()
 	if err != nil {
 		panic(err.Error())
@@ -60,11 +65,9 @@ func NewClient(AccessKey, SecretKey, Host string) *Client {
 
 	return client
 }
-
 func (c *Client) GetC2cBalance() (*c2c.AccountBalanceData, error) {
 	return c.C2client.GetC2CBalance(c.Accounts["investment"])
 }
-
 func (c *Client) BalanceOf(coin string) (balance float64, err error) {
 	amount := decimal.NewFromInt(0)
 	for ct, accountId := range c.Accounts {
@@ -89,4 +92,22 @@ func (c *Client) BalanceOf(coin string) (balance float64, err error) {
 	}
 	balance, _ = amount.Float64()
 	return balance, nil
+}
+func (c *Client) String(f float64, decimal int) string {
+	if decimal == 0 {
+		return fmt.Sprintf("%v", uint64(f))
+	} else if decimal <= 10 {
+		return fmt.Sprintf(fmt.Sprintf("%%.%vf", decimal), f)
+	} else {
+		return fmt.Sprintf("%.10f", f)
+	}
+}
+func (c *Client) Price(symbol string) (buyPrice float64, sellPrice float64, err error) {
+	if ticker, err := c.GetLast24hCandlestickAskBid(symbol); err != nil {
+		return 0, 0, err
+	} else {
+		buyPrice, _ = ticker.Bid[0].Float64()
+		sellPrice, _ = ticker.Ask[0].Float64()
+		return buyPrice, sellPrice, err
+	}
 }

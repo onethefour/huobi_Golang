@@ -1,4 +1,4 @@
-package grid
+package taoli
 
 import (
 	"encoding/json"
@@ -12,21 +12,21 @@ import (
 	"time"
 )
 
-func (g *Grid) Stop() {
+func (g *Taoli) Stop() {
 	g.Run = false
 	for g.Status == 1 {
 		time.Sleep(time.Second * 1)
 	}
 	return
 }
-func (g *Grid) Register() {
+func (g *Taoli) Register() {
 	if err := services.Register(g.Id, g); err != nil {
 		log.Info(err.Error())
 		services.Stop(g.Id)
 		services.Register(g.Id, g)
 	}
 }
-func (g *Grid) Start() {
+func (g *Taoli) Start() {
 	g.Register()
 	defer services.Remove(g.Id)
 	// 标记为running
@@ -35,19 +35,13 @@ func (g *Grid) Start() {
 		g.Status = 0
 	}()
 
-	if g.Model == 1 {
-		g.work_classical()
-	} else if g.Model == 2 {
-		g.work_buy()
-	} else if g.Model == 3 {
-		g.work_sell()
-	}
+	g.Work()
 }
-func (g *Grid) Action() error {
+func (g *Taoli) Action() error {
 	return nil
 }
 
-func (g *Grid) BuyPrice() (price float64, err error) {
+func (g *Taoli) BuyPrice() (price float64, err error) {
 	if ticker, err := g.GetLast24hCandlestickAskBid(g.BaseCurrency + g.QuoteCurrency); err != nil {
 		return 0, err
 	} else {
@@ -55,7 +49,7 @@ func (g *Grid) BuyPrice() (price float64, err error) {
 		return price,err
 	}
 }
-func (g *Grid) SellPrice() (price float64, err error) {
+func (g *Taoli) SellPrice() (price float64, err error) {
 	if ticker, err := g.GetLast24hCandlestickAskBid(g.BaseCurrency + g.QuoteCurrency); err != nil {
 		return 0, err
 	} else {
@@ -63,7 +57,7 @@ func (g *Grid) SellPrice() (price float64, err error) {
 		return price,err
 	}
 }
-func (g *Grid) Price() (buyPrice float64, sellPrice float64, err error) {
+func (g *Taoli) Price() (buyPrice float64, sellPrice float64, err error) {
 	if ticker, err := g.GetLast24hCandlestickAskBid(g.BaseCurrency + g.QuoteCurrency); err != nil {
 		return 0, 0, err
 	} else {
@@ -72,7 +66,7 @@ func (g *Grid) Price() (buyPrice float64, sellPrice float64, err error) {
 		return buyPrice,sellPrice,err
 	}
 }
-func (m *Grid) BuyMarket(_usdt float64) error {
+func (m *Taoli) BuyMarket(_usdt float64) error {
 
 	PlaceOrderRequest := &order.PlaceOrderRequest{
 		AccountId: m.Accounts["spot"],
@@ -90,7 +84,7 @@ func (m *Grid) BuyMarket(_usdt float64) error {
 	}
 	return new(appmodels.Orders).Add(ret.Data, m.Id)
 }
-func (m *Grid) SellMarket(_btc float64) error {
+func (m *Taoli) SellMarket(_btc float64) error {
 
 	PlaceOrderRequest := &order.PlaceOrderRequest{
 		AccountId: m.Accounts["spot"],
@@ -108,7 +102,7 @@ func (m *Grid) SellMarket(_btc float64) error {
 	}
 	return new(appmodels.Orders).Add(ret.Data, m.Id)
 }
-func (m *Grid) String(f float64, decimal int) string {
+func (m *Taoli) String(f float64, decimal int) string {
 	if decimal == 0 {
 		return fmt.Sprintf("%v", uint64(f))
 	} else if decimal <= 10 {

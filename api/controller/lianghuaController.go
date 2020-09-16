@@ -2,18 +2,16 @@ package controller
 
 import (
 	"encoding/json"
-	"huobi_Golang/common/config"
-	"huobi_Golang/pkg/client"
-	"huobi_Golang/services/grid"
-	"log"
-	"math"
-	"time"
-
 	"github.com/gin-gonic/gin"
 	"huobi_Golang/api/models"
-	"huobi_Golang/api/robot"
 	"huobi_Golang/api/utils"
-	//"huobi_Golang/models"
+	"huobi_Golang/common/config"
+	"huobi_Golang/common/log"
+	"huobi_Golang/pkg/client"
+	"huobi_Golang/services"
+	"huobi_Golang/services/start"
+	"math"
+	"time"
 )
 
 //运行服务
@@ -23,7 +21,11 @@ func init() {
 		panic(err.Error())
 	}
 	for i := 0; i < len(list); i++ {
-		go robot.NewGridBuy(list[i].Id, list[i].Model, list[i].AccountId, list[i].BaseCurrency, list[i].QuoteCurrency, list[i].Datas, list[i].Owner, list[i].AccessKey, list[i].SecretKey).Start()
+		s,err:= start.NewServer(list[i])
+		if err != nil{
+			log.Warn(err.Error())
+		}
+		go s.Start()
 	}
 }
 
@@ -74,7 +76,7 @@ func (ctl *LianghuaController) order_list(ctx *gin.Context) {
 	//new(models.Orders).Flush(19)
 	err := new(models.Statis).Compute(19)
 	if err != nil {
-		log.Println(err.Error())
+		log.Warn(err.Error())
 	}
 	infos, _ := new(models.Orders).List(19)
 	ctx.JSON(200, gin.H{"code": 1, "data": infos})
@@ -121,7 +123,7 @@ func (ctl *LianghuaController) start(ctx *gin.Context) {
 		ctx.JSON(200, gin.H{"code": 1, "message": err.Error()})
 		return
 	}
-	robot.Stop(params.Id)
+	services.Stop(params.Id)
 	info := new(models.Stracy)
 	has, err := info.Get(params.Id)
 	if err != nil {
@@ -133,7 +135,13 @@ func (ctl *LianghuaController) start(ctx *gin.Context) {
 		return
 	}
 	new(models.Stracy).UpdateRun(params.Id, 1)
-	go robot.NewGridBuy(info.Id, info.Model, info.AccountId, info.BaseCurrency, info.QuoteCurrency, info.Datas, info.Owner, info.AccessKey, info.SecretKey).Start()
+	if s,err := start.NewServer(info);err != nil{
+		log.Warn(err.Error())
+		ctx.JSON(200, gin.H{"code": 1, "message": err.Error()})
+		return
+	} else {
+		go s.Start()
+	}
 	ctx.JSON(200, gin.H{"code": 0, "message": "success"})
 }
 func (ctl *LianghuaController) stop(ctx *gin.Context) {
@@ -142,7 +150,7 @@ func (ctl *LianghuaController) stop(ctx *gin.Context) {
 		ctx.JSON(200, gin.H{"code": 1, "message": err.Error()})
 		return
 	}
-	robot.Stop(params.Id)
+	services.Stop(params.Id)
 	new(models.Stracy).UpdateRun(params.Id, 0)
 	ctx.JSON(200, gin.H{"code": 0, "message": "success"})
 }
@@ -152,7 +160,7 @@ func (ctl *LianghuaController) action(ctx *gin.Context) {
 		ctx.JSON(200, gin.H{"code": 1, "message": err.Error()})
 		return
 	}
-	robot.Action(params.Id)
+	services.Action(params.Id)
 	ctx.JSON(200, gin.H{"code": 0, "message": "success"})
 }
 func (ctl *LianghuaController) delete(ctx *gin.Context) {
@@ -161,7 +169,7 @@ func (ctl *LianghuaController) delete(ctx *gin.Context) {
 		ctx.JSON(200, gin.H{"code": 1, "message": err.Error()})
 		return
 	}
-	robot.Stop(params.Id)
+	services.Stop(params.Id)
 	if err := new(models.Stracy).Delete(params.Id); err != nil {
 		ctx.JSON(200, gin.H{"code": 1, "message": err.Error()})
 		return
@@ -185,7 +193,7 @@ func (ctl *LianghuaController) edit(ctx *gin.Context) {
 		return
 	}
 	//停止服务
-	robot.Stop(params.Id)
+	services.Stop(params.Id)
 	oldStracy := new(models.Stracy)
 	has, err := oldStracy.Get(params.Id)
 	if err != nil {
@@ -198,7 +206,7 @@ func (ctl *LianghuaController) edit(ctx *gin.Context) {
 	}
 	params.Run = oldStracy.Run
 
-	oldCtxts := make([]*robot.Ctxt, 0)
+	oldCtxts := make([]*services.Ctxt, 0)
 	if err := json.Unmarshal([]byte(oldStracy.Datas), &oldCtxts); err != nil {
 		ctx.JSON(200, gin.H{"code": 1, "message": err.Error()})
 		return
@@ -219,10 +227,10 @@ func (ctl *LianghuaController) edit(ctx *gin.Context) {
 		}
 	}
 	Price := params.MaxPrice
-	newCtxts := make([]*robot.Ctxt, 0)
+	newCtxts := make([]*services.Ctxt, 0)
 	TotalBaseCurrency := float64(0)
 	for i := 0; i < 100 && Price > params.MinPrice; i++ {
-		tctxt := new(robot.Ctxt)
+		tctxt := new(services.Ctxt)
 		tctxt.BuyMount = params.Amount
 		tctxt.BuyPrice = utils.Digits(params.MaxPrice*math.Pow((100-params.HeightPrice)/100, float64(i)), 4)
 		tctxt.SellPrice = utils.Digits(tctxt.BuyPrice*(100+params.SellPrice)/100, 4)
@@ -237,10 +245,18 @@ func (ctl *LianghuaController) edit(ctx *gin.Context) {
 		ctx.JSON(200, gin.H{"code": 1, "message": err.Error()})
 		return
 	}
+
 	ctx.JSON(200, gin.H{"code": 0, "message": "success"})
 	//启动服务
+
 	if params.Run == 1 {
-		go grid.NewGrid(params.Id, params.Model, params.AccountId, params.BaseCurrency, params.QuoteCurrency, params.Datas, params.Owner, params.AccessKey, params.SecretKey).Start()
+		stray := new(models.Stracy)
+		stray.Get(params.Id)
+		if s,err := start.NewServer(stray);err != nil {
+			log.Warn(err.Error())
+		} else {
+			go s.Start()
+		}
 	}
 	//newCtxts,覆盖 oldCtxts
 }
@@ -251,10 +267,10 @@ func (ctl *LianghuaController) add(ctx *gin.Context) {
 		return
 	}
 	Price := params.MaxPrice
-	ctxts := make([]*grid.Ctxt, 0)
+	ctxts := make([]*services.Ctxt, 0)
 	TotalBaseCurrency := float64(0)
 	for i := 0; i < 100 && Price > params.MinPrice; i++ {
-		tctxt := new(grid.Ctxt)
+		tctxt := new(services.Ctxt)
 		tctxt.BuyMount = params.Amount
 		tctxt.BuyPrice = utils.Digits(params.MaxPrice*math.Pow((100-params.HeightPrice)/100, float64(i)), 4)
 		tctxt.SellPrice = utils.Digits(tctxt.BuyPrice*(100+params.SellPrice)/100, 4)
@@ -307,8 +323,9 @@ func (ctl *LianghuaController) get_balance(ctx *gin.Context) {
 		ctx.JSON(200, gin.H{"code": 1, "message": err.Error()})
 		return
 	}
-	grid := robot.NewGridBuy(1, 1, params.AccountId, "btc", "usdt", "[]", "", params.AccessKey, params.SecretKey)
-	balance, err := grid.BalanceOf(params.Currency)
+
+	client := client.NewClient(params.AccessKey, params.SecretKey,"")
+	balance, err := client.BalanceOf(params.Currency)
 	if err != nil {
 		ctx.JSON(200, gin.H{"code": 1, "message": err.Error()})
 		return
@@ -322,12 +339,13 @@ func (ctl *LianghuaController) get_price(ctx *gin.Context) {
 		ctx.JSON(200, gin.H{"code": 1, "message": err.Error()})
 		return
 	}
-	grid := robot.NewGridBuy(1, 1, params.AccountId, params.BaseCurrency, params.QuoteCurrency, "[]", "", params.AccessKey, params.SecretKey)
-	price, err := grid.BuyPrice()
-	if err != nil {
+	client := client.NewClient(params.AccessKey, params.SecretKey,"")
+	if ticker, err := client.GetLast24hCandlestickAskBid( params.BaseCurrency+params.QuoteCurrency); err != nil {
 		ctx.JSON(200, gin.H{"code": 1, "message": err.Error()})
 		return
+	} else {
+		price, _ := ticker.Ask[0].Float64()
+		ctx.JSON(200, gin.H{"code": 0, "data": price})
+		return
 	}
-	ctx.JSON(200, gin.H{"code": 0, "data": price})
-	return
 }

@@ -68,6 +68,7 @@ func (m *Stracy) Delete(Id int) (err error) {
 	_, err = engineScan.Delete(tm)
 	return err
 }
+
 func (m *Stracy) Get(Id int) (has bool, err error) {
 	engineScan, err := utils.Engine_scan()
 	if err != nil {

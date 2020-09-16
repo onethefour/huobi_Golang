@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"net/url"
 )
 
@@ -31,6 +32,14 @@ func (p *GetRequest) AddParam(property string, value string) *GetRequest {
 		p.urls.Add(property, value)
 	}
 	return p
+}
+
+// Add URL escape property and value pair
+func (p *GetRequest) Add(property string, value interface{}) *GetRequest {
+	if property == "" || value == nil {
+		return p
+	}
+	return p.AddParam(property, fmt.Sprintf("%v", value))
 }
 
 // Concat the property and value pair

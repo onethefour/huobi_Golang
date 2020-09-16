@@ -1,0 +1,5 @@
+.idea/
+cmd/
+*_test.go
+
+huobi_Golang
